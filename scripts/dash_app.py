@@ -2,8 +2,16 @@
 '''
 TODO
 - Zelfde vrachtwagen minder vaak meetellen
+ --> gemiddelde per punt
 - buttons etc op de goede plek
 - linkerbaan rechterbaan?
+- Bootstrap components
+- Resetten of niet na actie
+- stresstest
+- verschillende zooms
+--> van segment naar wegniveau
+--> linkerbaan/rechterbaan
+- Naar CSS kijken
 '''
 #%%
 import dash

@@ -1,0 +1,5 @@
+data/
+kerastest/
+scripts/__pycache__
+scripts/variables.py
+scripts/dash_test.py
