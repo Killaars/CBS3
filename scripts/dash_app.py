@@ -27,10 +27,7 @@ import datetime
 from variables import token
 
 # Read shapefile
-#path = Path('/mnt/74C6E433C6E3F2F2/Users/rwsla/Lars/CBS_3_visualization/') # Main directory
 path = Path('/home/killaarsl/Documents/CBS3_visualization/') # Main directory
-#shp_dir = 'data/output'
-#shp_name = 'all6_4326.geojson'
 
 # Read csv file
 df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
@@ -44,6 +41,10 @@ road_lats = [df[df['road']==x][['Camera_id','lat']].sort_values(by='Camera_id').
 road_lons = [df[df['road']==x][['Camera_id','lon']].sort_values(by='Camera_id').drop_duplicates(subset='Camera_id')['lon'].values for x in df['road'].unique()]
 road_points = pd.DataFrame({'lats' : road_lats,
                             'lons' : road_lons},index = df['road'].unique())
+
+# Create df with number of cameras for the entire road
+nr_cameras = pd.DataFrame({'nr_cameras' : [len(df[df['road']==x]['Camera_id'].unique()) for x in df['road'].unique()]},
+                                           index = df['road'].unique())
 
 # Get first and last timestamp, in order to get first and last dates and times
 mn, mx = min(df['timestamp']),max(df['timestamp'])
@@ -98,7 +99,7 @@ app.layout = html.Div([
                         dcc.Dropdown(
                                 id='end_time',
                                 options=[{'label': i, 'value': i} for i in range(24)],
-                                value = 0
+                                value = 23
                                 )
                         
                         ],
@@ -108,6 +109,7 @@ app.layout = html.Div([
         html.Div([
                 dcc.Graph(id='mapbox_graph', 
                           hoverData={'points': [{'lat': 52.3128,'lon' : 7.0391}]},
+                          relayoutData={'mapbox.zoom': 6.5},
                           )],
                           style={'width': '69%','display': 'inline-block', 'padding': '0 20'}
                 ),
@@ -161,38 +163,56 @@ def filter_data(selected_mode,selected_gevi,start_date,end_date,begin_time,end_t
 @app.callback(
     Output('mapbox_graph', 'figure'),
     [Input('filtered_data', 'children'),
+     Input('mapbox_graph','relayoutData'),
      ])
-def update_figure(jsonified_filtered_data):
+def update_figure(jsonified_filtered_data,relayoutData):
     '''
     Builds mapbox graph graph. Uses filtered data from filter_data.
     Calculates intensity for the road pieces and determines color and linewidth based on this
     '''
+
+    # Add default zoom if not present in relayoutData
+    if 'mapbox.zoom' not in relayoutData:
+        relayoutData['mapbox.zoom']=6.5
+    print(relayoutData)
+    
+    # Load data from hidden div
     dff = pd.read_json(jsonified_filtered_data, orient='split')
     
-    ########## If one or more entries, fill plot_data graph, else, return empty trace
-    if len(dff)>0:
-        # Bepalen max_intensity of all roads
-        max_intensity = max(dff['road'].value_counts())    
-        
-        # Bepalen intensiteit per segment
-        plot_data = []
-        for road in dff.road.unique():
-            intensity = len(dff[dff['road']==road])    
-            plot_data.append(dict(type='scattermapbox',
-                                  #lat = dff[dff['road']==road]['lat'].unique(),
-                                  #lon = dff[dff['road']==road]['lon'].unique(),
-                                  lat = road_points.loc[road,'lats'],
-                                  lon = road_points.loc[road,'lons'],
-                                  mode='lines',
-                                  text=str(intensity),
-                                  line=dict(width=get_linewidth(intensity,max_intensity),
-                                            color=get_color(intensity,max_intensity)),
-                                  showlegend=True,
-                                  name=road,
-                                  hoverinfo='text'
-                                  ))
-    else:
-        plot_data = []
+    # Zoom smaller than XXXX --> aggregates per road. Segment and travel direction in hoverinfo
+    if relayoutData['mapbox.zoom'] < 80:
+        # If one or more entries, fill plot_data graph, else, return empty trace
+        if len(dff)>0:
+            # Bepalen max_intensity of all roads
+            max_intensity = max(dff['road'].value_counts()/nr_cameras['nr_cameras'])    
+            
+            # Bepalen intensiteit per segment
+            plot_data = []
+            for road in dff.road.unique():
+                intensity = len(dff[dff['road']==road])/nr_cameras.loc[road,'nr_cameras']   
+                plot_data.append(dict(type='scattermapbox',
+                                      lat = road_points.loc[road,'lats'],
+                                      lon = road_points.loc[road,'lons'],
+                                      mode='lines',
+                                      text=str(intensity),
+                                      line=dict(width=get_linewidth(intensity,max_intensity),
+                                                color=get_color(intensity,max_intensity)),
+                                      showlegend=True,
+                                      name=road,
+                                      hoverinfo='text'
+                                      ))
+        else:
+            plot_data = []
+    
+#    # Zoom smaller than XXXX --> aggregates per segment. Travel direction in hoverinfo
+#    if (relayoutData['mapbox.zoom'] >= 8) & (relayoutData['mapbox.zoom'] < 12):
+#        print('bla')
+#        plot_data = []
+#        
+#    # Zoom smaller than XXXX --> aggregates per segment and travel direction
+#    if relayoutData['mapbox.zoom'] >= 12:
+#        print('bla')
+#        plot_data = []
     
     ### Returns plot_data as data part of plotly graph and filled layout 
     return {
@@ -205,6 +225,7 @@ def update_figure(jsonified_filtered_data):
             margin = dict(l = 0, r = 0, t = 0, b = 0),
             #margin={'l': 40, 'b': 40, 't': 10, 'r': 10},
             mapbox = dict(
+                uirevision='no reset of zoom',
                 accesstoken = token,
                 #bearing = 0,
                 center = dict(
@@ -226,7 +247,6 @@ def timeseries_graph(jsonified_filtered_data,hoverData):
     '''
     Builds timeseries graph. Uses hoverData to select camera point and filtered data from filter_data
     '''
-    print(hoverData)
     # Read input
     dff = pd.read_json(jsonified_filtered_data, orient='split')
     lat = hoverData['points'][0]['lat']
