@@ -1,17 +1,17 @@
 #%%
 '''
 TODO
-- Zelfde vrachtwagen minder vaak meetellen
- --> gemiddelde per punt
+#- Zelfde vrachtwagen minder vaak meetellen
+# --> gemiddelde per punt
 - buttons etc op de goede plek
-- linkerbaan rechterbaan?
 - Bootstrap components
 - Resetten of niet na actie
 - stresstest
-- verschillende zooms
---> van segment naar wegniveau
---> linkerbaan/rechterbaan
+#- verschillende zooms
+#--> van segment naar wegniveau
+#--> linkerbaan/rechterbaan
 - Naar CSS kijken
+- Alleen data in graph bekijken. Hoge zoom niveaus dus alleen lokale data
 '''
 #%%
 import dash
@@ -205,41 +205,45 @@ def update_figure(jsonified_filtered_data,relayoutData):
             plot_data = []
     
     # Zoom smaller than XXXX --> aggregates per segment. Travel direction in hoverinfo
-    if (relayoutData['mapbox.zoom'] >= 8) & (relayoutData['mapbox.zoom'] < 12):
-        # Maximum of the most intense segment of each road with data
-        max_intensity = max([max(dff[dff['road']==x]['Camera_id'].value_counts()) for x in dff['road'].unique()])
+    if relayoutData['mapbox.zoom'] >= 8:
+        # Determine maximum intensity for each segment
+        # first for each travel direction
+        max_intensity = []
+        for direction in dff['direction'].unique():
+            temp_df = dff[dff['direction']==direction]
+            max_intensity.append(max([max(temp_df[temp_df['road']==x]['Camera_id'].value_counts()) for x in temp_df['road'].unique()]))
+        max_intensity = max(max_intensity)
         
+        # Empty plot data
         plot_data = []
-        for road in dff['road'].unique():
-            for segment in dff[dff['road']==road]['Camera_id'].unique():
-                intensity = len(dff[(dff['road']==road)&(dff['Camera_id']==segment)])
-                
-                # Select coords of this point and the next, if not possible, only this point
-                try:
-                    lats = [dff[(dff['road']==road)&(dff['Camera_id']==segment)]['lat'].mean(),dff[(dff['road']==road)&(dff['Camera_id']==segment+1)]['lat'].mean()]
-                    lons = [dff[(dff['road']==road)&(dff['Camera_id']==segment)]['lon'].mean(),dff[(dff['road']==road)&(dff['Camera_id']==segment+1)]['lon'].mean()]
-                except:
-                    lats = [dff[(dff['road']==road)&(dff['Camera_id']==segment)]['lat'].mean()]
-                    lons = [dff[(dff['road']==road)&(dff['Camera_id']==segment)]['lon'].mean()]
+        
+        for direction in dff['direction'].unique():
+            temp_df = dff[dff['direction']==direction]
+            for road in temp_df['road'].unique():
+                for segment in temp_df[temp_df['road']==road]['Camera_id'].unique():
+                    intensity = len(temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)])
                     
-                plot_data.append(dict(type='scattermapbox',
-                                  lat = lats,
-                                  lon = lons,
-                                  mode='lines',
-                                  text='%s - %s' %(intensity,max_intensity),
-                                  line=dict(width=get_linewidth(intensity,max_intensity),
-                                            color=get_color(intensity,max_intensity)),
-                                  showlegend=False,
-                                  name=road,
-                                  hoverinfo='text'
-                                  ))
-                
-                
-#        
-#    # Zoom smaller than XXXX --> aggregates per segment and travel direction
-#    if relayoutData['mapbox.zoom'] >= 12:
-#        print('bla')
-#        plot_data = []
+                    # Select coords of this point and the next, if not possible, only this point
+                    try:
+                        lats = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lat'].mean(),
+                                    temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment+1)]['lat'].mean()]
+                        lons = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lon'].mean(),
+                                    temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment+1)]['lon'].mean()]
+                    except:
+                        lats = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lat'].mean()]
+                        lons = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lon'].mean()]
+                        
+                    plot_data.append(dict(type='scattermapbox',
+                                      lat = lats,
+                                      lon = lons,
+                                      mode='lines',
+                                      text='%s - %s - %s' %(intensity,road,direction),
+                                      line=dict(width=get_linewidth(intensity,max_intensity),
+                                                color=get_color(intensity,max_intensity)),
+                                      showlegend=False,
+                                      name=road,
+                                      hoverinfo='text'
+                                      ))            
     
     ### Returns plot_data as data part of plotly graph and filled layout 
     return {
