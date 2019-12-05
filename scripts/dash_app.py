@@ -27,19 +27,18 @@ import datetime
 from variables import token
 
 # Read shapefile
-path = Path('/mnt/74C6E433C6E3F2F2/Users/rwsla/Lars/CBS_3_visualization/') # Main directory
-shp_dir = 'data/output'
-shp_name = 'all6_4326.geojson'
+#path = Path('/mnt/74C6E433C6E3F2F2/Users/rwsla/Lars/CBS_3_visualization/') # Main directory
+path = Path('/home/killaarsl/Documents/CBS3_visualization/') # Main directory
+#shp_dir = 'data/output'
+#shp_name = 'all6_4326.geojson'
 
 # Read csv file
 df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
-df.rename(columns={"Unnamed: 0": "Camera_id"},inplace=True)
 df = df.round(4)
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 
 # Splitting bottom part of West into A4_R
-df.loc[(df['road']=='West')&(df['Camera_id']<7),'road']='A4_R'
-
+df.loc[(df['road']=='West')&(df['Camera_id']<7),'road']='A4'
 
 road_lats = [df[df['road']==x][['Camera_id','lat']].sort_values(by='Camera_id').drop_duplicates(subset='Camera_id')['lat'].values for x in df['road'].unique()]
 road_lons = [df[df['road']==x][['Camera_id','lon']].sort_values(by='Camera_id').drop_duplicates(subset='Camera_id')['lon'].values for x in df['road'].unique()]
@@ -108,7 +107,7 @@ app.layout = html.Div([
             ]),
         html.Div([
                 dcc.Graph(id='mapbox_graph', 
-                          hoverData={'points': [{'lat': 52.3128}]}
+                          hoverData={'points': [{'lat': 52.3128,'lon' : 7.0391}]},
                           )],
                           style={'width': '69%','display': 'inline-block', 'padding': '0 20'}
                 ),
@@ -231,6 +230,7 @@ def timeseries_graph(jsonified_filtered_data,hoverData):
     # Read input
     dff = pd.read_json(jsonified_filtered_data, orient='split')
     lat = hoverData['points'][0]['lat']
+    lon = hoverData['points'][0]['lon']
     
     # Build timeseries for location
     #print(lat,dff['lat'].unique())
@@ -247,7 +247,7 @@ def timeseries_graph(jsonified_filtered_data,hoverData):
     return {
             'data': data,
             'layout': {
-                'title': 'Timeseries for location %s' %(lat)
+                'title': 'Timeseries for location %s, %s' %(lat,lon)
                 }
             }
                                     
