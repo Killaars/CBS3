@@ -180,15 +180,15 @@ def update_figure(jsonified_filtered_data,relayoutData):
     dff = pd.read_json(jsonified_filtered_data, orient='split')
     
     # Zoom smaller than XXXX --> aggregates per road. Segment and travel direction in hoverinfo
-    if relayoutData['mapbox.zoom'] < 80:
+    if relayoutData['mapbox.zoom'] < 8:
         # If one or more entries, fill plot_data graph, else, return empty trace
         if len(dff)>0:
             # Bepalen max_intensity of all roads
             max_intensity = max(dff['road'].value_counts()/nr_cameras['nr_cameras'])    
             
-            # Bepalen intensiteit per segment
+            # Bepalen intensiteit per road
             plot_data = []
-            for road in dff.road.unique():
+            for road in dff['road'].unique():
                 intensity = len(dff[dff['road']==road])/nr_cameras.loc[road,'nr_cameras']   
                 plot_data.append(dict(type='scattermapbox',
                                       lat = road_points.loc[road,'lats'],
@@ -204,10 +204,37 @@ def update_figure(jsonified_filtered_data,relayoutData):
         else:
             plot_data = []
     
-#    # Zoom smaller than XXXX --> aggregates per segment. Travel direction in hoverinfo
-#    if (relayoutData['mapbox.zoom'] >= 8) & (relayoutData['mapbox.zoom'] < 12):
-#        print('bla')
-#        plot_data = []
+    # Zoom smaller than XXXX --> aggregates per segment. Travel direction in hoverinfo
+    if (relayoutData['mapbox.zoom'] >= 8) & (relayoutData['mapbox.zoom'] < 12):
+        # Maximum of the most intense segment of each road with data
+        max_intensity = max([max(dff[dff['road']==x]['Camera_id'].value_counts()) for x in dff['road'].unique()])
+        
+        plot_data = []
+        for road in dff['road'].unique():
+            for segment in dff[dff['road']==road]['Camera_id'].unique():
+                intensity = len(dff[(dff['road']==road)&(dff['Camera_id']==segment)])
+                
+                # Select coords of this point and the next, if not possible, only this point
+                try:
+                    lats = [dff[(dff['road']==road)&(dff['Camera_id']==segment)]['lat'].mean(),dff[(dff['road']==road)&(dff['Camera_id']==segment+1)]['lat'].mean()]
+                    lons = [dff[(dff['road']==road)&(dff['Camera_id']==segment)]['lon'].mean(),dff[(dff['road']==road)&(dff['Camera_id']==segment+1)]['lon'].mean()]
+                except:
+                    lats = [dff[(dff['road']==road)&(dff['Camera_id']==segment)]['lat'].mean()]
+                    lons = [dff[(dff['road']==road)&(dff['Camera_id']==segment)]['lon'].mean()]
+                    
+                plot_data.append(dict(type='scattermapbox',
+                                  lat = lats,
+                                  lon = lons,
+                                  mode='lines',
+                                  text='%s - %s' %(intensity,max_intensity),
+                                  line=dict(width=get_linewidth(intensity,max_intensity),
+                                            color=get_color(intensity,max_intensity)),
+                                  showlegend=False,
+                                  name=road,
+                                  hoverinfo='text'
+                                  ))
+                
+                
 #        
 #    # Zoom smaller than XXXX --> aggregates per segment and travel direction
 #    if relayoutData['mapbox.zoom'] >= 12:
@@ -249,8 +276,8 @@ def timeseries_graph(jsonified_filtered_data,hoverData):
     '''
     # Read input
     dff = pd.read_json(jsonified_filtered_data, orient='split')
-    lat = hoverData['points'][0]['lat']
-    lon = hoverData['points'][0]['lon']
+    lat = np.round(hoverData['points'][0]['lat'],4)
+    lon = np.round(hoverData['points'][0]['lon'],4)
     
     # Build timeseries for location
     #print(lat,dff['lat'].unique())
