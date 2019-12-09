@@ -25,6 +25,7 @@ import matplotlib
 import datetime
 
 from variables import token
+from variables import p3 as zoom_curve
 
 # Read shapefile
 path = Path('/home/killaarsl/Documents/CBS3_visualization/') # Main directory
@@ -61,6 +62,31 @@ def get_linewidth(intensity,max_intensity):
     ''' returns the rounded integer of a number between 2 and 10, depending on 
     the ratio between the intensity and max intensity of the road'''
     return int(np.round(np.max([4.0,10*(intensity/max_intensity)])))
+
+def determine_bbox(zoom,center_lat,center_lon,fit):
+    ''' returns coordinates of the bounding box of the visible graph. 
+    Scales with the zoom level and should be used to filter the data that 
+    has to be graphed'''
+    from geopy.distance import distance
+    boxdimensions = [800,1200] # size box in pixels [height,width]
+    
+    # determine distance per pixel
+    distanceperpixel = fit(zoom)
+    
+    # distance of the box in meter
+    verbox = boxdimensions[0]*distanceperpixel
+    horbox = boxdimensions[1]*distanceperpixel
+    
+    # Determine the bounding coordinates
+    maxlat = distance(meters=verbox/2).destination(
+        (center_lat, center_lon), 0)[0]
+    minlat = distance(meters=verbox/2).destination(
+        (center_lat, center_lon), 180)[0]
+    maxlon = distance(meters=horbox/2).destination(
+        (center_lat, center_lon), 90)[1]
+    minlon = distance(meters=horbox/2).destination(
+        (center_lat, center_lon), 270)[1]
+    return maxlat,maxlon,minlat,minlon
 
 
 ## Wegen afhankelijk van de zoom
@@ -133,8 +159,9 @@ Filters and stores the df as json, other graphs can use it as input
      Input('date_picker', 'end_date'),
      Input('begin_time', 'value'),
      Input('end_time', 'value'),
+     Input('mapbox_graph','relayoutData'),
      ])
-def filter_data(selected_mode,selected_gevi,start_date,end_date,begin_time,end_time):
+def filter_data(selected_mode,selected_gevi,start_date,end_date,begin_time,end_time,relayoutData):
     ######### Realtime 
     '''
     TODO Change to 15 minutes before now
@@ -157,6 +184,23 @@ def filter_data(selected_mode,selected_gevi,start_date,end_date,begin_time,end_t
         filtered_df = filtered_df[filtered_df['gevi'].isin(selected_gevi)]
     else:
         filtered_df = filtered_df
+        
+    # Filter based on zoom window
+    if 'mapbox.zoom' in relayoutData:
+        if relayoutData['mapbox.zoom'] >8.5:
+            maxlat,maxlon,minlat,minlon = determine_bbox(
+                relayoutData['mapbox.zoom'],
+                relayoutData['mapbox.center']['lat'],
+                relayoutData['mapbox.center']['lon'],
+                zoom_curve)
+            
+            filtered_df = filtered_df[(filtered_df['lat']>=minlat) & 
+                                      (filtered_df['lat']<=maxlat) & 
+                                      (filtered_df['lon']>=minlon) & 
+                                      (filtered_df['lon']<=maxlon)]
+            
+        else:
+            filtered_df = filtered_df
         
     return filtered_df.to_json(date_format='iso', orient='split')
 
@@ -206,45 +250,47 @@ def update_figure(jsonified_filtered_data,relayoutData):
     
     # Zoom smaller than XXXX --> aggregates per segment. Travel direction in hoverinfo
     if relayoutData['mapbox.zoom'] >= 8:
-        # Determine maximum intensity for each segment
-        # first for each travel direction
-        max_intensity = []
-        for direction in dff['direction'].unique():
-            temp_df = dff[dff['direction']==direction]
-            max_intensity.append(max([max(temp_df[temp_df['road']==x]['Camera_id'].value_counts()) for x in temp_df['road'].unique()]))
-        max_intensity = max(max_intensity)
-        
-        # Empty plot data
-        plot_data = []
-        
-        for direction in dff['direction'].unique():
-            temp_df = dff[dff['direction']==direction]
-            for road in temp_df['road'].unique():
-                for segment in temp_df[temp_df['road']==road]['Camera_id'].unique():
-                    intensity = len(temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)])
-                    
-                    # Select coords of this point and the next, if not possible, only this point
-                    try:
-                        lats = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lat'].mean(),
-                                    temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment+1)]['lat'].mean()]
-                        lons = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lon'].mean(),
-                                    temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment+1)]['lon'].mean()]
-                    except:
-                        lats = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lat'].mean()]
-                        lons = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lon'].mean()]
+        if len(dff)>0:
+            # Determine maximum intensity for each segment
+            # first for each travel direction
+            max_intensity = []
+            for direction in dff['direction'].unique():
+                temp_df = dff[dff['direction']==direction]
+                max_intensity.append(max([max(temp_df[temp_df['road']==x]['Camera_id'].value_counts()) for x in temp_df['road'].unique()]))
+            max_intensity = max(max_intensity)
+            
+            # Empty plot data
+            plot_data = []
+            
+            for direction in dff['direction'].unique():
+                temp_df = dff[dff['direction']==direction]
+                for road in temp_df['road'].unique():
+                    for segment in temp_df[temp_df['road']==road]['Camera_id'].unique():
+                        intensity = len(temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)])
                         
-                    plot_data.append(dict(type='scattermapbox',
-                                      lat = lats,
-                                      lon = lons,
-                                      mode='lines',
-                                      text='%s - %s - %s' %(intensity,road,direction),
-                                      line=dict(width=get_linewidth(intensity,max_intensity),
-                                                color=get_color(intensity,max_intensity)),
-                                      showlegend=False,
-                                      name=road,
-                                      hoverinfo='text'
-                                      ))            
-    
+                        # Select coords of this point and the next, if not possible, only this point
+                        try:
+                            lats = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lat'].mean(),
+                                        temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment+1)]['lat'].mean()]
+                            lons = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lon'].mean(),
+                                        temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment+1)]['lon'].mean()]
+                        except:
+                            lats = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lat'].mean()]
+                            lons = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lon'].mean()]
+                            
+                        plot_data.append(dict(type='scattermapbox',
+                                          lat = lats,
+                                          lon = lons,
+                                          mode='lines',
+                                          text='%s - %s - %s' %(intensity,road,direction),
+                                          line=dict(width=get_linewidth(intensity,max_intensity),
+                                                    color=get_color(intensity,max_intensity)),
+                                          showlegend=False,
+                                          name=road,
+                                          hoverinfo='text'
+                                          ))            
+        else:
+            plot_data = []
     ### Returns plot_data as data part of plotly graph and filled layout 
     return {
         "data":plot_data,
