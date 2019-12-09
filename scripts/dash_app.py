@@ -25,7 +25,7 @@ import matplotlib
 import datetime
 
 from variables import token
-from variables import p3 as zoom_curve
+from project_functions import p3 as zoom_curve
 from project_functions import get_color,get_linewidth,determine_bbox
 
 # Read shapefile

@@ -1,6 +1,12 @@
 import numpy as np
 import matplotlib
 
+# Zoom pixel distance curve
+levels = [8,9,10,11,12]
+distance = [193.5,96.5,48.5,24,12.5]
+
+p3 = np.poly1d(np.polyfit(levels, distance, 3))
+
 def get_color(intensity,max_intensity):
     ''' returns color value of colormap, depending on the ration between the 
     intensity and the max intensity of the road. '''
