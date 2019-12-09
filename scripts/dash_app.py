@@ -1,17 +1,21 @@
 #%%
 '''
 TODO
-#- Zelfde vrachtwagen minder vaak meetellen
-# --> gemiddelde per punt
-- buttons etc op de goede plek
+- Buttons etc op de goede plek
 - Bootstrap components
-- Resetten of niet na actie
-- stresstest
-#- verschillende zooms
-#--> van segment naar wegniveau
-#--> linkerbaan/rechterbaan
+- Stresstest
 - Naar CSS kijken
+- Daily or hourly mode
+
+DONE
+- Zelfde vrachtwagen minder vaak meetellen
+--> gemiddelde per punt
+- verschillende zooms
+--> van segment naar wegniveau
+--> linkerbaan/rechterbaan
+- Resetten of niet na actie
 - Alleen data in graph bekijken. Hoge zoom niveaus dus alleen lokale data
+
 '''
 #%%
 import dash
@@ -88,9 +92,10 @@ app.layout = html.Div([
                                 )
                         
                         ],
-                        style={'width': '48%', 'float': 'right', 'display': 'inline-block'})
-    
-            ]),
+                        style={'width': '48%', 'float': 'right', 'display': 'inline-block','marginBottom': '1em'})
+                
+            ],style={'backgroundColor':'blue'}),
+        
         html.Div([
                 dcc.Graph(id='mapbox_graph', 
                           hoverData={'points': [{'lat': 52.3128,'lon' : 7.0391}]},
