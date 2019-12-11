@@ -21,6 +21,8 @@ DONE
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
+
 from dash.dependencies import Input, Output
 import pandas as pd
 import numpy as np
@@ -79,31 +81,75 @@ app.layout = html.Div(
                         # Two breaks to get it on the save level as the graph block
                         html.Br(),
                         html.Br(),
-                        dcc.RadioItems(
-                            id='mode',
-                            options=[{'label': i, 'value': i} for i in ['Realtime', 'Aggregated']],
-                            value='Realtime',
-                            labelStyle={'display': 'inline-block'}),
-                        dcc.Dropdown(
-                            id='gevi_selector',
-                            options=[{'label': i, 'value': i} for i in df['gevi'].unique()],
-                            multi=True,
-                            value = []),
-                        dcc.DatePickerRange(
-                            id='date_picker',
-                            start_date = datetime.datetime(mn.year, mn.month, mn.day),
-                            end_date = datetime.datetime(mx.year, mx.month, mx.day),
+                        # Group to select the mode of the graph
+                        dbc.FormGroup([
+                            dbc.Label('Pick mode: '),
+                            dbc.RadioItems(
+                                id = 'mode',
+                                options = [{'label': i, 'value': i} for i in ['Realtime', 'Aggregated']],
+                                value = 'Realtime',
+                                labelStyle={'display': 'inline-block'},
+                                )
+                            ]),
+                        html.Br(),
+                        # Group to select the GEVI codes
+                        dbc.FormGroup([
+                            dbc.Label('Select GEVI codes: '),
+                            dcc.Dropdown(
+                                id='gevi_selector',
+                                options=[{'label': i, 'value': i} for i in np.sort(df['gevi'].unique())],
+                                multi=True,
+                                value = []),
+                            ]),
+                        html.Br(),
+                        # Checkboxes to determine the filtering
+                        dbc.FormGroup([
+                            dbc.Label('Select filter detail:'),
+                            dbc.Checklist(
+                                id = 'filteroptions',
+                                options = [
+                                    {"label": "Daily", "value": 'daily'},
+                                    {"label": "Hourly", "value": 'hourly'},
+                                    ],
+                                labelStyle={'display': 'inline-block'},
+                                value = []
+                                    )
+                            ]),
+                        html.Br(),
+                        dbc.FormGroup([
+                            dbc.Label('Select start and end date:'),
+                            dcc.DatePickerSingle(
+                                id="start_date",
+                                min_date_allowed=datetime.datetime(mn.year, mn.month, mn.day),
+                                max_date_allowed=datetime.datetime(mx.year, mx.month, mx.day),
+                                initial_visible_month=datetime.datetime(mn.year, mn.month, mn.day),
+                                date=datetime.datetime(mn.year, mn.month, mn.day),
+                                display_format="MMMM D, YYYY",
+                                style={"border": "0px solid black"},
+                            ),    
+                            dcc.DatePickerSingle(
+                                id="end_date",
+                                min_date_allowed=datetime.datetime(mn.year, mn.month, mn.day),
+                                max_date_allowed=datetime.datetime(mx.year, mx.month, mx.day),
+                                initial_visible_month=datetime.datetime(mx.year, mx.month, mx.day),
+                                date=datetime.datetime(mx.year, mx.month, mx.day),
+                                display_format="MMMM D, YYYY",
+                                style={"border": "0px solid black"},
                             ),
-                        dcc.Dropdown(
-                            id='begin_time',
-                            options=[{'label': i, 'value': i} for i in range(24)],
-                            value = 0
-                            ),
-                        dcc.Dropdown(
-                            id='end_time',
-                            options=[{'label': i, 'value': i} for i in range(24)],
-                            value = 23
-                            )     
+                            html.Br(),
+                            html.Br(),
+                            dbc.Label('Select start and end time:'),
+                            dcc.RangeSlider(
+                                id = 'hour-slider',
+                                count=1,
+                                min=0,
+                                max=24,
+                                step=1,
+                                marks={i: '{}:00'.format(i) for i in range(0,30,6)},
+                                value=[0, 24]
+                                ),
+                            
+                            ]),
                         ],
                     style={'marginLeft': '1em'}
                     ),
@@ -151,13 +197,20 @@ Filters and stores the df as json, other graphs can use it as input
     Output('filtered_data', 'children'),
     [Input('mode', 'value'),
      Input('gevi_selector', 'value'),
-     Input('date_picker', 'start_date'),
-     Input('date_picker', 'end_date'),
-     Input('begin_time', 'value'),
-     Input('end_time', 'value'),
+     Input('start_date', 'date'),
+     Input('end_date', 'date'),
      Input('mapbox_graph', 'relayoutData'),
+     Input('filteroptions', 'value'),
+     Input('hour-slider', 'value'),
      ])
-def filter_data(selected_mode, selected_gevi, start_date, end_date, begin_time, end_time, relayoutData):
+def filter_data(selected_mode, 
+                selected_gevi, 
+                start_date, 
+                end_date, 
+                relayoutData, 
+                filteroptions,
+                hourslider):
+    print(filteroptions)
     ######### Realtime 
     '''
     TODO Change to 15 minutes before now
@@ -168,18 +221,28 @@ def filter_data(selected_mode, selected_gevi, start_date, end_date, begin_time, 
         
     ######### Aggregated
     if selected_mode == 'Aggregated':
+        filtered_df = df.copy()
         
-        ###### filter dates
-        start = str(pd.to_datetime(start_date) + pd.to_timedelta(int(begin_time), unit='h')) ## Type start_date is string?
-        end = str(pd.to_datetime(end_date) + pd.to_timedelta(int(end_time), unit='h'))
-        
-        filtered_df = df[(df['timestamp']>=start)&(df['timestamp']<=end)]
+        # Daily filtering --> between or equal to start/end date
+        if 'daily' in filteroptions:
+            filtered_df = filtered_df[(filtered_df['timestamp']>=start_date)&(filtered_df['timestamp']<=end_date)]
+            
+        # Hourly filtering --> Between certain hours, irrespective of date
+        if 'hourly' in filteroptions:
+            print('do hourly stuff')
+            print(hourslider)
+            index = pd.DatetimeIndex(filtered_df['timestamp'])
+            begin_time = '%s:00' %(hourslider[0])
+            end_time = '%s:00' %(hourslider[1])
+            if hourslider[1] == 24:
+                end_time = '23:59'
+            filtered_df = filtered_df.iloc[index.indexer_between_time(begin_time, end_time)]
     
-    # Filter gevi codes based on selection    
+    ######### Filter gevi codes based on selection    
     if len(selected_gevi)>0:
         filtered_df = filtered_df[filtered_df['gevi'].isin(selected_gevi)]
         
-    # Filter based on zoom window
+    ######### Filter based on zoom window
     if 'mapbox.zoom' in relayoutData:
         if relayoutData['mapbox.zoom'] >8.5:
             maxlat, maxlon, minlat, minlon = determine_bbox(
@@ -192,7 +255,8 @@ def filter_data(selected_mode, selected_gevi, start_date, end_date, begin_time, 
                                       (filtered_df['lat']<=maxlat) & 
                                       (filtered_df['lon']>=minlon) & 
                                       (filtered_df['lon']<=maxlon)]
-        
+    #########
+            
     return filtered_df.to_json(date_format='iso', orient='split')
 
 @app.callback(
@@ -305,7 +369,7 @@ def update_figure(jsonified_filtered_data, relayoutData):
                           lat=52.092876),
                 style = "light",
                 #pitch = 0,
-                zoom = 6.5,
+                zoom = 6.7,
             )
         )
     }
