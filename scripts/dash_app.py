@@ -1,11 +1,8 @@
 #%%
 '''
 TODO
-- Buttons etc op de goede plek
-- Bootstrap components
 - Stresstest
-- Naar CSS kijken
-- Daily or hourly mode
+- Nederlands of engels?
 
 DONE
 - Zelfde vrachtwagen minder vaak meetellen
@@ -15,6 +12,10 @@ DONE
 --> linkerbaan/rechterbaan
 - Resetten of niet na actie
 - Alleen data in graph bekijken. Hoge zoom niveaus dus alleen lokale data
+- Naar CSS kijken
+- Daily or hourly mode
+- Buttons etc op de goede plek
+- Bootstrap components
 
 '''
 #%%
@@ -37,6 +38,7 @@ from project_functions import get_color, get_linewidth, determine_bbox
 path = Path('/home/killaarsl/Documents/CBS3_visualization/') # Main directory
 
 # Read csv file
+df = pd.read_csv(str(path / 'data/output/proxy_data_withdec.csv'))
 df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
 df = df.round(4)
 df['timestamp'] = pd.to_datetime(df['timestamp'])
@@ -378,8 +380,9 @@ def update_figure(jsonified_filtered_data, relayoutData):
         Output('timeseries', 'figure'),
         [Input('filtered_data', 'children'),
          Input('mapbox_graph', 'hoverData'),
+     Input('filteroptions', 'value'),
          ])
-def timeseries_graph(jsonified_filtered_data, hoverData):
+def timeseries_graph(jsonified_filtered_data, hoverData,filteroptions):
     '''
     Builds timeseries graph. Uses hoverData to select camera point and filtered data from filter_data
     '''
@@ -389,24 +392,32 @@ def timeseries_graph(jsonified_filtered_data, hoverData):
     lon = np.round(hoverData['points'][0]['lon'], 4)
     
     # Build timeseries for location
-    #print(lat, dff['lat'].unique())
-    timeseries_to_plot = dff[dff['lat']==lat].copy()
-    timeseries_to_plot.loc[:, 'hourly_timestamp'] = timeseries_to_plot['timestamp'].apply(lambda dt: datetime.datetime(dt.year, dt.month, dt.day, dt.hour))
+    timeseries_to_plot = dff[(dff['lat']==lat) & (dff['lon']==lon)].copy()
+    if 'daily' in filteroptions:
+        timeseries_to_plot.loc[:, 'hourly_timestamp'] = timeseries_to_plot['timestamp'].dt.hour
+    else:
+        timeseries_to_plot.loc[:, 'hourly_timestamp'] = timeseries_to_plot['timestamp'].apply(lambda dt: datetime.datetime(dt.year, dt.month, dt.day, dt.hour))
     timeseries_to_plot = timeseries_to_plot[['gevi', 'hourly_timestamp']]
     timeseries_to_plot = pd.get_dummies(timeseries_to_plot)
     timeseries_to_plot = timeseries_to_plot.groupby(timeseries_to_plot['hourly_timestamp']).sum()
     timeseries_to_plot.index.names = ['index']
-    #print(timeseries_to_plot)
+    
     # store it as data variable for the plot
     data = [{'x': timeseries_to_plot.index, 'y':timeseries_to_plot[x], 'type':'bar', 'name':x, 'showlegend':True} for x in timeseries_to_plot.columns]
     
-    return {
-            'data': data,
-            'layout': dict(
+    
+    layout = dict(
                 title = 'Timeseries for location %s, %s' %(lat, lon),
                 plot_bgcolor="#1E1E1E", paper_bgcolor="#1E1E1E",    
-                font = dict(color = "#d8d8d8"),            
+                font = dict(color = "#d8d8d8"),
+                xaxis = dict(title = 'Number of trucks')
                 )
+    if 'daily' in filteroptions:
+        layout['xaxis']['title'] = "Trucks per hour of the day"
+    
+    return {
+            'data': data,
+            'layout': layout
             }
                                     
 app.run_server(debug=True)
