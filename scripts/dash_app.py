@@ -25,12 +25,11 @@ from dash.dependencies import Input, Output
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import matplotlib
 import datetime
 
 from variables import token
 from project_functions import p3 as zoom_curve
-from project_functions import get_color,get_linewidth,determine_bbox
+from project_functions import get_color, get_linewidth, determine_bbox
 
 # Read shapefile
 path = Path('/home/killaarsl/Documents/CBS3_visualization/') # Main directory
@@ -41,75 +40,108 @@ df = df.round(4)
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 
 # Splitting bottom part of West into A4_R
-df.loc[(df['road']=='West')&(df['Camera_id']<7),'road']='A4'
+df.loc[(df['road'] == 'West') & (df['Camera_id'] < 7), 'road'] = 'A4'
 
-road_lats = [df[df['road']==x][['Camera_id','lat']].sort_values(by='Camera_id').drop_duplicates(subset='Camera_id')['lat'].values for x in df['road'].unique()]
-road_lons = [df[df['road']==x][['Camera_id','lon']].sort_values(by='Camera_id').drop_duplicates(subset='Camera_id')['lon'].values for x in df['road'].unique()]
+road_lats = [df[df['road']==x][['Camera_id', 'lat']].sort_values(
+    by='Camera_id').drop_duplicates(subset='Camera_id')['lat'].values for x in df['road'].unique()]
+road_lons = [df[df['road']==x][['Camera_id', 'lon']].sort_values(
+    by='Camera_id').drop_duplicates(subset='Camera_id')['lon'].values for x in df['road'].unique()]
 road_points = pd.DataFrame({'lats' : road_lats,
-                            'lons' : road_lons},index = df['road'].unique())
+                            'lons' : road_lons}, index = df['road'].unique())
 
 # Create df with number of cameras for the entire road
 nr_cameras = pd.DataFrame({'nr_cameras' : [len(df[df['road']==x]['Camera_id'].unique()) for x in df['road'].unique()]},
                                            index = df['road'].unique())
 
 # Get first and last timestamp, in order to get first and last dates and times
-mn, mx = min(df['timestamp']),max(df['timestamp'])
+mn, mx = min(df['timestamp']), max(df['timestamp'])
 
 #%%
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']                          
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+# external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']                          
+# app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app = dash.Dash(
+    __name__, 
+    meta_tags=[
+        {"name": "viewport", "content": "width=device-width, initial-scale=1.0"}
+    ],
+)
 
-app.layout = html.Div([
-        html.Div([
-                html.Div([
+app.layout = html.Div(
+    children=[
+        html.Div(
+            id="body",
+            #className="container scalable",
+            children=[
+                html.Div(
+                    className="two columns",
+                    id="left-column",
+                    children=[
+                        # Two breaks to get it on the save level as the graph block
+                        html.Br(),
+                        html.Br(),
                         dcc.RadioItems(
-                                id='mode',
-                                options=[{'label': i, 'value': i} for i in ['Realtime', 'Aggregated']],
-                                value='Realtime',
-                                labelStyle={'display': 'inline-block'}),
+                            id='mode',
+                            options=[{'label': i, 'value': i} for i in ['Realtime', 'Aggregated']],
+                            value='Realtime',
+                            labelStyle={'display': 'inline-block'}),
                         dcc.Dropdown(
-                                id='gevi_selector',
-                                options=[{'label': i, 'value': i} for i in df['gevi'].unique()],
-                                multi=True,
-                                value = [])
-                        ],
-                        style={'width': '48%', 'display': 'inline-block'}),
-                html.Div([
+                            id='gevi_selector',
+                            options=[{'label': i, 'value': i} for i in df['gevi'].unique()],
+                            multi=True,
+                            value = []),
                         dcc.DatePickerRange(
-                                id='date_picker',
-                                start_date = datetime.datetime(mn.year,mn.month,mn.day),
-                                end_date = datetime.datetime(mx.year,mx.month,mx.day),
-                                ),
+                            id='date_picker',
+                            start_date = datetime.datetime(mn.year, mn.month, mn.day),
+                            end_date = datetime.datetime(mx.year, mx.month, mx.day),
+                            ),
                         dcc.Dropdown(
-                                id='begin_time',
-                                options=[{'label': i, 'value': i} for i in range(24)],
-                                value = 0
-                                ),
+                            id='begin_time',
+                            options=[{'label': i, 'value': i} for i in range(24)],
+                            value = 0
+                            ),
                         dcc.Dropdown(
-                                id='end_time',
-                                options=[{'label': i, 'value': i} for i in range(24)],
-                                value = 23
-                                )
-                        
+                            id='end_time',
+                            options=[{'label': i, 'value': i} for i in range(24)],
+                            value = 23
+                            )     
                         ],
-                        style={'width': '48%', 'float': 'right', 'display': 'inline-block','marginBottom': '1em'})
-                
-            ],style={'backgroundColor':'blue'}),
-        
-        html.Div([
-                dcc.Graph(id='mapbox_graph', 
-                          hoverData={'points': [{'lat': 52.3128,'lon' : 7.0391}]},
-                          relayoutData={'mapbox.zoom': 6.5},
-                          )],
-                          style={'width': '69%','display': 'inline-block', 'padding': '0 20'}
-                ),
-        html.Div([
-                dcc.Graph(id='timeseries')],
-                style={'display': 'inline-block', 'width': '29%'}
-                ),
-    # Hidden div inside the app that stores the intermediate value
-    html.Div(id='filtered_data', style={'display': 'none'})
-    ])
+                    style={'marginLeft': '1em'}
+                    ),
+                html.Div(
+                    className="nine columns",
+                    children = [
+                        html.H2(
+                            id="banner-title",
+                            children = [
+                                html.A(
+                                    "Intensiteit van vrachtwagens met gevaarlijke stoffen over de Nederlandse snelwegen",
+                                    href="https://github.com/Killaars/CBS3",
+                                    style={
+                                        "text-decoration": "none",
+                                        "color": "inherit",
+                                    },
+                                )
+                            ],
+                        ),
+                        html.Div(children = [
+                            dcc.Graph(id='mapbox_graph', 
+                                hoverData={'points': [{'lat': 52.3128, 'lon' : 7.0391}]},
+                                relayoutData={'mapbox.zoom': 6.5},
+                                )],
+                            style={'width': '69%', 'display': 'inline-block', 'padding': '0 20'}
+                            ),
+                        html.Div(children = [
+                            dcc.Graph(id='timeseries')],
+                            style={'display': 'inline-block', 'width': '29%', 'vertical-align': 'top'}
+                            ),
+                        ]
+                    ),
+                ]
+            ),
+            # Hidden div inside the app that stores the intermediate value
+            html.Div(id='filtered_data', style={'display': 'none'})
+        ]
+    )
 
 ### Filter data callback
 '''
@@ -123,9 +155,9 @@ Filters and stores the df as json, other graphs can use it as input
      Input('date_picker', 'end_date'),
      Input('begin_time', 'value'),
      Input('end_time', 'value'),
-     Input('mapbox_graph','relayoutData'),
+     Input('mapbox_graph', 'relayoutData'),
      ])
-def filter_data(selected_mode,selected_gevi,start_date,end_date,begin_time,end_time,relayoutData):
+def filter_data(selected_mode, selected_gevi, start_date, end_date, begin_time, end_time, relayoutData):
     ######### Realtime 
     '''
     TODO Change to 15 minutes before now
@@ -146,13 +178,11 @@ def filter_data(selected_mode,selected_gevi,start_date,end_date,begin_time,end_t
     # Filter gevi codes based on selection    
     if len(selected_gevi)>0:
         filtered_df = filtered_df[filtered_df['gevi'].isin(selected_gevi)]
-    else:
-        filtered_df = filtered_df
         
     # Filter based on zoom window
     if 'mapbox.zoom' in relayoutData:
         if relayoutData['mapbox.zoom'] >8.5:
-            maxlat,maxlon,minlat,minlon = determine_bbox(
+            maxlat, maxlon, minlat, minlon = determine_bbox(
                 relayoutData['mapbox.zoom'],
                 relayoutData['mapbox.center']['lat'],
                 relayoutData['mapbox.center']['lon'],
@@ -162,18 +192,15 @@ def filter_data(selected_mode,selected_gevi,start_date,end_date,begin_time,end_t
                                       (filtered_df['lat']<=maxlat) & 
                                       (filtered_df['lon']>=minlon) & 
                                       (filtered_df['lon']<=maxlon)]
-            
-        else:
-            filtered_df = filtered_df
         
     return filtered_df.to_json(date_format='iso', orient='split')
 
 @app.callback(
     Output('mapbox_graph', 'figure'),
     [Input('filtered_data', 'children'),
-     Input('mapbox_graph','relayoutData'),
+     Input('mapbox_graph', 'relayoutData'),
      ])
-def update_figure(jsonified_filtered_data,relayoutData):
+def update_figure(jsonified_filtered_data, relayoutData):
     '''
     Builds mapbox graph graph. Uses filtered data from filter_data.
     Calculates intensity for the road pieces and determines color and linewidth based on this
@@ -197,14 +224,14 @@ def update_figure(jsonified_filtered_data,relayoutData):
             # Bepalen intensiteit per road
             plot_data = []
             for road in dff['road'].unique():
-                intensity = len(dff[dff['road']==road])/nr_cameras.loc[road,'nr_cameras']   
+                intensity = len(dff[dff['road']==road])/nr_cameras.loc[road, 'nr_cameras']   
                 plot_data.append(dict(type='scattermapbox',
-                                      lat = road_points.loc[road,'lats'],
-                                      lon = road_points.loc[road,'lons'],
+                                      lat = road_points.loc[road, 'lats'],
+                                      lon = road_points.loc[road, 'lons'],
                                       mode='lines',
                                       text=str(intensity),
-                                      line=dict(width=get_linewidth(intensity,max_intensity),
-                                                color=get_color(intensity,max_intensity)),
+                                      line=dict(width=get_linewidth(intensity, max_intensity), 
+                                                color=get_color(intensity, max_intensity)),
                                       showlegend=True,
                                       name=road,
                                       hoverinfo='text'
@@ -233,6 +260,8 @@ def update_figure(jsonified_filtered_data,relayoutData):
                         intensity = len(temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)])
                         
                         # Select coords of this point and the next, if not possible, only this point
+                        # The mean of all lat/lon for this segment for this road. Are multiple similar, 
+                        # mean gives one of those.
                         try:
                             lats = [temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment)]['lat'].mean(),
                                         temp_df[(temp_df['road']==road)&(temp_df['Camera_id']==segment+1)]['lat'].mean()]
@@ -246,9 +275,9 @@ def update_figure(jsonified_filtered_data,relayoutData):
                                           lat = lats,
                                           lon = lons,
                                           mode='lines',
-                                          text='%s - %s - %s' %(intensity,road,direction),
-                                          line=dict(width=get_linewidth(intensity,max_intensity),
-                                                    color=get_color(intensity,max_intensity)),
+                                          text='%s - %s - %s' %(intensity, road, direction),
+                                          line=dict(width=get_linewidth(intensity, max_intensity),
+                                                    color=get_color(intensity, max_intensity)),
                                           showlegend=False,
                                           name=road,
                                           hoverinfo='text'
@@ -262,6 +291,8 @@ def update_figure(jsonified_filtered_data,relayoutData):
             #autosize = True,
             height = 800,
             legend = dict(orientation="h"),
+            plot_bgcolor="#1E1E1E", paper_bgcolor="#1E1E1E",
+            font = dict(color = "#d8d8d8"),
             hovermode = "closest",
             margin = dict(l = 0, r = 0, t = 0, b = 0),
             #margin={'l': 40, 'b': 40, 't': 10, 'r': 10},
@@ -280,36 +311,38 @@ def update_figure(jsonified_filtered_data,relayoutData):
     }
                                       
 @app.callback(
-        Output('timeseries','figure'),
+        Output('timeseries', 'figure'),
         [Input('filtered_data', 'children'),
-         Input('mapbox_graph','hoverData'),
+         Input('mapbox_graph', 'hoverData'),
          ])
-def timeseries_graph(jsonified_filtered_data,hoverData):
+def timeseries_graph(jsonified_filtered_data, hoverData):
     '''
     Builds timeseries graph. Uses hoverData to select camera point and filtered data from filter_data
     '''
     # Read input
     dff = pd.read_json(jsonified_filtered_data, orient='split')
-    lat = np.round(hoverData['points'][0]['lat'],4)
-    lon = np.round(hoverData['points'][0]['lon'],4)
+    lat = np.round(hoverData['points'][0]['lat'], 4)
+    lon = np.round(hoverData['points'][0]['lon'], 4)
     
     # Build timeseries for location
-    #print(lat,dff['lat'].unique())
+    #print(lat, dff['lat'].unique())
     timeseries_to_plot = dff[dff['lat']==lat].copy()
-    timeseries_to_plot.loc[:,'hourly_timestamp'] = timeseries_to_plot['timestamp'].apply(lambda dt: datetime.datetime(dt.year, dt.month, dt.day, dt.hour))
-    timeseries_to_plot = timeseries_to_plot[['gevi','hourly_timestamp']]
+    timeseries_to_plot.loc[:, 'hourly_timestamp'] = timeseries_to_plot['timestamp'].apply(lambda dt: datetime.datetime(dt.year, dt.month, dt.day, dt.hour))
+    timeseries_to_plot = timeseries_to_plot[['gevi', 'hourly_timestamp']]
     timeseries_to_plot = pd.get_dummies(timeseries_to_plot)
     timeseries_to_plot = timeseries_to_plot.groupby(timeseries_to_plot['hourly_timestamp']).sum()
     timeseries_to_plot.index.names = ['index']
     #print(timeseries_to_plot)
     # store it as data variable for the plot
-    data = [{'x': timeseries_to_plot.index,'y':timeseries_to_plot[x],'type':'bar','name':x, 'showlegend':True} for x in timeseries_to_plot.columns]
+    data = [{'x': timeseries_to_plot.index, 'y':timeseries_to_plot[x], 'type':'bar', 'name':x, 'showlegend':True} for x in timeseries_to_plot.columns]
     
     return {
             'data': data,
-            'layout': {
-                'title': 'Timeseries for location %s, %s' %(lat,lon)
-                }
+            'layout': dict(
+                title = 'Timeseries for location %s, %s' %(lat, lon),
+                plot_bgcolor="#1E1E1E", paper_bgcolor="#1E1E1E",    
+                font = dict(color = "#d8d8d8"),            
+                )
             }
                                     
 app.run_server(debug=True)
