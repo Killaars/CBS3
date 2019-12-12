@@ -3,13 +3,11 @@
 TODO
 - Monitoring mode with https://dash.plot.ly/live-updates
 - dynamic layout
+- Realtime naar 15 minuten vanaf nu
 
 DONE
-- Zelfde vrachtwagen minder vaak meetellen
---> gemiddelde per punt
-- verschillende zooms
---> van segment naar wegniveau
---> linkerbaan/rechterbaan
+- Zelfde vrachtwagen minder vaak meetellen --> gemiddelde per punt
+- verschillende zooms --> van segment naar wegniveau en linkerbaan/rechterbaan
 - Resetten of niet na actie
 - Alleen data in graph bekijken. Hoge zoom niveaus dus alleen lokale data
 - Naar CSS kijken
@@ -21,33 +19,38 @@ DONE
 
 '''
 # %%
+from pathlib import Path
+import datetime
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
-
 from dash.dependencies import Input, Output
 import pandas as pd
 import numpy as np
-from pathlib import Path
-import datetime
 
 from variables import token
 from project_functions import p3 as zoom_curve
 from project_functions import get_color, get_linewidth, determine_bbox
 
-# Read shapefile
+# Set paths/filenames etc
 path = Path('/home/killaarsl/Documents/CBS3_visualization/')  # Main directory
+filename = 'data/output/proxy_data_withdec.csv'
 
 # Read csv file
-df = pd.read_csv(str(path / 'data/output/proxy_data_withdec.csv'))
+# First read is done here, some variables are extracted from this
+# Afterwards, updated every minute
+df = pd.read_csv(str(path / filename))
 # df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
 df = df.round(4)
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 
-
 # Splitting bottom part of West into A4_R
 df.loc[(df['road'] == 'West') & (df['Camera_id'] < 7), 'road'] = 'A4'
+
+# converting to json format
+df_json = df.to_json(date_format='iso', orient='split')
 
 road_lats = [df[df['road'] == x][['Camera_id', 'lat']].sort_values(
     by='Camera_id').drop_duplicates(subset='Camera_id')['lat'].values for x in df['road'].unique()]
@@ -160,9 +163,16 @@ app.layout = html.Div(
                                 min=0,
                                 max=24,
                                 step=1,
-                                marks={i: '{}:00'.format(i) for i in range(0, 30, 6)},
+                                marks={i: '{}:00'.format(i) for i in range(0, 28, 4)},
                                 value=[0, 24]
                                 ),
+                            html.Br(),
+                            html.Br(),
+                            dcc.Interval(
+                                id='interval-component',
+                                interval=60*1000, # in milliseconds, every minute
+                                n_intervals=0
+                                )
                             ]),
                         ],
                     style={'marginLeft': '1em'}
@@ -199,36 +209,54 @@ app.layout = html.Div(
                     ),
                 ]
             ),
-        # Hidden div inside the app that stores the intermediate value
-        html.Div(id='filtered_data', style={'display': 'none'})
+        # Hidden div inside the app that stores the refreshed data
+        # Updated every minute
+        html.Div(id='refreshed_data', style={'display': 'none'}),
+        # Hidden div inside the app that stores the filtered data
+        html.Div(id='filtered_data',
+                 style={'display': 'none'}),
         ]
     )
 
 
-# Disables daily filter if daily is not selected
+@app.callback(Output('refreshed_data', 'children'),
+              [Input('interval-component', 'n_intervals')])
+def update_data(n):
+    new_df = pd.read_csv(str(path / filename))
+    # df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
+    new_df = new_df.round(4)
+    new_df['timestamp'] = pd.to_datetime(new_df['timestamp'])
+    
+    # Splitting bottom part of West into A4_R
+    new_df.loc[(new_df['road'] == 'West') & (new_df['Camera_id'] < 7), 'road'] = 'A4'
+    return new_df.to_json(date_format='iso', orient='split')
+
+
 @app.callback([Output('start_date', 'disabled'),
                Output('end_date', 'disabled')],
               [Input('filteroptions', 'value')])
 def set_date_enabled_state(filteroptions):
+    '''
+    Disables daily filter if daily is not selected
+    '''
     if 'daily' in filteroptions:
         on_off = False
     else:
         on_off = True
     return on_off, on_off
 
-# Disables hourly filter if hourly is not selected
+
 @app.callback(Output('hour-slider', 'disabled'),
               [Input('filteroptions', 'value')])
 def set_hour_enabled_state(filteroptions):
+    '''
+    Disables hourly filter if hourly is not selected
+    '''
     if 'hourly' in filteroptions:
         on_off = False
     else:
         on_off = True
     return on_off
-
-
-# Filter data callback
-# Filters and stores the df as json, other graphs can use it as input
 
 
 @app.callback(
@@ -240,25 +268,35 @@ def set_hour_enabled_state(filteroptions):
      Input('mapbox_graph', 'relayoutData'),
      Input('filteroptions', 'value'),
      Input('hour-slider', 'value'),
+     Input('refreshed_data', 'children'),
      ])
 def filter_data(selected_mode,
                 selected_gevi,
                 start_date,
                 end_date,
-                relayoutData,
+                relayoutdata,
                 filteroptions,
-                hourslider):
+                hourslider,
+                jsonified_refreshed_data):
+    '''
+    Filter data callback
+    Reads refreshed data given by update_data
+    Filters and stores the df as json, other graphs can use it as input
+    '''
+    # Load data from hidden div, if possible
+    try:
+        dff = pd.read_json(jsonified_refreshed_data, orient='split')
+    except:
+        dff = pd.read_json(df_json, orient='split')
+    
     # Realtime
-    '''
-    TODO Change to 15 minutes before now
-    '''
     if selected_mode == 'Realtime':
-        timecutoff = max(df['timestamp']) - datetime.timedelta(minutes=15)
-        filtered_df = df[df['timestamp'] >= timecutoff]
+        timecutoff = max(dff['timestamp']) - datetime.timedelta(minutes=15)
+        filtered_df = dff[dff['timestamp'] >= timecutoff]
 
     # Aggregated
     if selected_mode == 'Alles':
-        filtered_df = df.copy()
+        filtered_df = dff.copy()
 
         # Daily filtering --> between or equal to start/end date
         if 'daily' in filteroptions:
@@ -279,12 +317,12 @@ def filter_data(selected_mode,
         filtered_df = filtered_df[filtered_df['gevi'].isin(selected_gevi)]
 
     # Filter based on zoom window
-    if 'mapbox.zoom' in relayoutData:
-        if relayoutData['mapbox.zoom'] > 8.5:
+    if 'mapbox.zoom' in relayoutdata:
+        if relayoutdata['mapbox.zoom'] > 8.5:
             maxlat, maxlon, minlat, minlon = determine_bbox(
-                relayoutData['mapbox.zoom'],
-                relayoutData['mapbox.center']['lat'],
-                relayoutData['mapbox.center']['lon'],
+                relayoutdata['mapbox.zoom'],
+                relayoutdata['mapbox.center']['lat'],
+                relayoutdata['mapbox.center']['lon'],
                 zoom_curve)
 
             filtered_df = filtered_df[(filtered_df['lat'] >= minlat) &
@@ -300,7 +338,7 @@ def filter_data(selected_mode,
     [Input('filtered_data', 'children'),
      Input('mapbox_graph', 'relayoutData'),
      ])
-def update_figure(jsonified_filtered_data, relayoutData):
+def update_figure(jsonified_filtered_data, relayoutdata):
     '''
     Builds mapbox graph graph. Uses filtered data from filter_data.
     Calculates intensity for the road pieces and determines color and
@@ -308,15 +346,15 @@ def update_figure(jsonified_filtered_data, relayoutData):
     '''
 
     # Add default zoom if not present in relayoutData
-    if 'mapbox.zoom' not in relayoutData:
-        relayoutData['mapbox.zoom'] = 6.5
-    print(relayoutData)
+    if 'mapbox.zoom' not in relayoutdata:
+        relayoutdata['mapbox.zoom'] = 6.5
+    print(relayoutdata)
     # Load data from hidden div
     dff = pd.read_json(jsonified_filtered_data, orient='split')
 
     # Zoom smaller than XXXX --> aggregates per road.
     # Segment and travel direction in hoverinfo
-    if relayoutData['mapbox.zoom'] < 9.5:
+    if relayoutdata['mapbox.zoom'] < 9.5:
         # If one or more entries, fill plot_data graph,
         # else, return empty trace
         if len(dff) > 0:
@@ -342,7 +380,7 @@ def update_figure(jsonified_filtered_data, relayoutData):
             plot_data = []
 
     # Zoom smaller than XXXX --> aggregates per segment. Travel direction in hoverinfo
-    if relayoutData['mapbox.zoom'] >= 9.5:
+    if relayoutdata['mapbox.zoom'] >= 9.5:
         if len(dff) > 0:
             # Determine maximum intensity for each segment
             # first for each travel direction
@@ -425,14 +463,14 @@ def update_figure(jsonified_filtered_data, relayoutData):
          Input('mapbox_graph', 'hoverData'),
          Input('filteroptions', 'value'),
          ])
-def timeseries_graph(jsonified_filtered_data, hoverData, filteroptions):
+def timeseries_graph(jsonified_filtered_data, hoverdata, filteroptions):
     '''
     Builds timeseries graph. Uses hoverData to select camera point and filtered data from filter_data
     '''
     # Read input
     dff = pd.read_json(jsonified_filtered_data, orient='split')
-    lat = np.round(hoverData['points'][0]['lat'], 4)
-    lon = np.round(hoverData['points'][0]['lon'], 4)
+    lat = np.round(hoverdata['points'][0]['lat'], 4)
+    lon = np.round(hoverdata['points'][0]['lon'], 4)
 
     # Build timeseries for location
     timeseries_to_plot = dff[(dff['lat'] == lat) & (dff['lon'] == lon)].copy()
