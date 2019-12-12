@@ -3,6 +3,7 @@
 TODO
 - dynamic layout
 - Realtime naar 15 minuten vanaf nu
+- denken over einddatum
 
 DONE
 - Zelfde vrachtwagen minder vaak meetellen --> gemiddelde per punt
@@ -64,7 +65,9 @@ nr_cameras = pd.DataFrame({'nr_cameras': [len(df[df['road'] == x]['Camera_id'].u
                           index=df['road'].unique())
 
 # Get first and last timestamp, in order to get first and last dates and times
-mn, mx = min(df['timestamp']), max(df['timestamp'])
+# First from the data and last is current time
+mn = min(df['timestamp'])
+mx = pd.to_datetime(datetime.datetime.now())
 
 # %%
 # external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -126,49 +129,56 @@ app.layout = html.Div(
                                 )
                             ]),
                         html.Br(),
-                        dbc.FormGroup([
-                            dbc.Label('Kies start en eind datum:'),
-                            dcc.DatePickerSingle(
-                                id="start_date",
-                                min_date_allowed=datetime.datetime(
-                                    mn.year, mn.month, mn.day),
-                                max_date_allowed=datetime.datetime(
-                                    mx.year, mx.month, mx.day),
-                                initial_visible_month=datetime.datetime(
-                                    mn.year, mn.month, mn.day),
-                                date=datetime.datetime(
-                                    mn.year, mn.month, mn.day),
-                                display_format="MMMM D, YYYY",
-                                style={"border": "0px solid black"},
-                            ),
-                            dcc.DatePickerSingle(
-                                id="end_date",
-                                min_date_allowed=datetime.datetime(
-                                    mn.year, mn.month, mn.day),
-                                max_date_allowed=datetime.datetime(
-                                    mx.year, mx.month, mx.day),
-                                initial_visible_month=datetime.datetime(
-                                    mx.year, mx.month, mx.day),
-                                date=datetime.datetime(
-                                    mx.year, mx.month, mx.day),
-                                display_format="MMMM D, YYYY",
-                                style={"border": "0px solid black"},
-                            ),
-                            ]),
-                        html.Br(),
-                        dbc.FormGroup([
-                            dbc.Label('Kies start en eind tijd:'),
-                            dcc.RangeSlider(
-                                id='hour-slider',
-                                count=1,
-                                min=0,
-                                max=24,
-                                step=1,
-                                marks={i: '{}:00'.format(i) for i in range(0, 28, 4)},
-                                value=[0, 24]
+                        dbc.FormGroup(
+                            id='date_formgroup',
+                                children=[
+                                dbc.Label('Kies start en eind datum:'),
+                                dcc.DatePickerSingle(
+                                    id="start_date",
+                                    min_date_allowed=datetime.datetime(
+                                        mn.year, mn.month, mn.day),
+                                    max_date_allowed=datetime.datetime(
+                                        mx.year, mx.month, mx.day),
+                                    initial_visible_month=datetime.datetime(
+                                        mn.year, mn.month, mn.day),
+                                    date=datetime.datetime(
+                                        mn.year, mn.month, mn.day),
+                                    display_format="MMMM D, YYYY",
+                                    style={"border": "0px solid black"},
                                 ),
-                            ]),
-                        html.Br(),
+                                dcc.DatePickerSingle(
+                                    id="end_date",
+                                    min_date_allowed=datetime.datetime(
+                                        mn.year, mn.month, mn.day),
+                                    max_date_allowed=datetime.datetime(
+                                        mx.year, mx.month, mx.day),
+                                    initial_visible_month=datetime.datetime(
+                                        mx.year, mx.month, mx.day),
+                                    date=datetime.datetime(
+                                        mx.year, mx.month, mx.day),
+                                    display_format="MMMM D, YYYY",
+                                    style={"border": "0px solid black"},
+                                    ),
+                                html.Br(),
+                                html.Br(),
+                                ], style={"display": "none"}
+                            ),
+                        dbc.FormGroup(
+                            id='hour_formgroup',
+                            children=[
+                                dbc.Label('Kies start en eind tijd:'),
+                                dcc.RangeSlider(
+                                    id='hour-slider',
+                                    count=1,
+                                    min=0,
+                                    max=24,
+                                    step=1,
+                                    marks={i: '{}:00'.format(i) for i in range(0, 28, 4)},
+                                    value=[0, 24]
+                                    ),
+                                html.Br(),
+                                ], style={"display": "none"}
+                            ),
                         dbc.FormGroup([
                             dcc.Interval(
                                 id='interval-component',
@@ -224,8 +234,10 @@ app.layout = html.Div(
 @app.callback(Output('refreshed_data', 'children'),
               [Input('interval-component', 'n_intervals')])
 def update_data(n):
+    '''
+    Check the file for new data every minute
+    '''
     new_df = pd.read_csv(str(path / filename))
-    # df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
     new_df = new_df.round(4)
     new_df['timestamp'] = pd.to_datetime(new_df['timestamp'])
     
@@ -234,31 +246,28 @@ def update_data(n):
     return new_df.to_json(date_format='iso', orient='split')
 
 
-@app.callback([Output('start_date', 'disabled'),
-               Output('end_date', 'disabled')],
+@app.callback(Output('date_formgroup', 'style'),               
               [Input('filteroptions', 'value')])
-def set_date_enabled_state(filteroptions):
+def show_dates(filteroptions):
     '''
-    Disables daily filter if daily is not selected
+    Only show daily if it makes sense
     '''
     if 'daily' in filteroptions:
-        on_off = False
+        return {}
     else:
-        on_off = True
-    return on_off, on_off
+        return {'display': 'none'}
 
 
-@app.callback(Output('hour-slider', 'disabled'),
+@app.callback(Output('hour_formgroup', 'style'),               
               [Input('filteroptions', 'value')])
-def set_hour_enabled_state(filteroptions):
+def show_hours(filteroptions):
     '''
-    Disables hourly filter if hourly is not selected
+    Only show hourly if it makes sense
     '''
     if 'hourly' in filteroptions:
-        on_off = False
+        return {}
     else:
-        on_off = True
-    return on_off
+        return {'display': 'none'}
 
 
 @app.callback(
