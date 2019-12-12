@@ -2,7 +2,8 @@
 '''
 TODO
 - Stresstest
-- Nederlands of engels?
+- Monitoring mode with https://dash.plot.ly/live-updates
+- dynamic layout
 
 DONE
 - Zelfde vrachtwagen minder vaak meetellen
@@ -16,6 +17,7 @@ DONE
 - Daily or hourly mode
 - Buttons etc op de goede plek
 - Bootstrap components
+- Nederlands of engels?
 
 '''
 #%%
@@ -39,7 +41,7 @@ path = Path('/home/killaarsl/Documents/CBS3_visualization/') # Main directory
 
 # Read csv file
 df = pd.read_csv(str(path / 'data/output/proxy_data_withdec.csv'))
-df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
+#df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
 df = df.round(4)
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 
@@ -85,10 +87,10 @@ app.layout = html.Div(
                         html.Br(),
                         # Group to select the mode of the graph
                         dbc.FormGroup([
-                            dbc.Label('Pick mode: '),
+                            dbc.Label('Kies een mode: '),
                             dbc.RadioItems(
                                 id = 'mode',
-                                options = [{'label': i, 'value': i} for i in ['Realtime', 'Aggregated']],
+                                options = [{'label': i, 'value': i} for i in ['Realtime', 'Alles']],
                                 value = 'Realtime',
                                 labelStyle={'display': 'inline-block'},
                                 )
@@ -96,7 +98,7 @@ app.layout = html.Div(
                         html.Br(),
                         # Group to select the GEVI codes
                         dbc.FormGroup([
-                            dbc.Label('Select GEVI codes: '),
+                            dbc.Label('Kies GEVI codes: '),
                             dcc.Dropdown(
                                 id='gevi_selector',
                                 options=[{'label': i, 'value': i} for i in np.sort(df['gevi'].unique())],
@@ -106,12 +108,12 @@ app.layout = html.Div(
                         html.Br(),
                         # Checkboxes to determine the filtering
                         dbc.FormGroup([
-                            dbc.Label('Select filter detail:'),
+                            dbc.Label('Kies filter detail:'),
                             dbc.Checklist(
                                 id = 'filteroptions',
                                 options = [
-                                    {"label": "Daily", "value": 'daily'},
-                                    {"label": "Hourly", "value": 'hourly'},
+                                    {"label": "Dagelijks", "value": 'daily'},
+                                    {"label": "Uurlijks", "value": 'hourly'},
                                     ],
                                 labelStyle={'display': 'inline-block'},
                                 value = []
@@ -119,7 +121,7 @@ app.layout = html.Div(
                             ]),
                         html.Br(),
                         dbc.FormGroup([
-                            dbc.Label('Select start and end date:'),
+                            dbc.Label('Kies start en eind datum:'),
                             dcc.DatePickerSingle(
                                 id="start_date",
                                 min_date_allowed=datetime.datetime(mn.year, mn.month, mn.day),
@@ -140,7 +142,7 @@ app.layout = html.Div(
                             ),
                             html.Br(),
                             html.Br(),
-                            dbc.Label('Select start and end time:'),
+                            dbc.Label('Kies start en eind tijd:'),
                             dcc.RangeSlider(
                                 id = 'hour-slider',
                                 count=1,
@@ -212,7 +214,6 @@ def filter_data(selected_mode,
                 relayoutData, 
                 filteroptions,
                 hourslider):
-    print(filteroptions)
     ######### Realtime 
     '''
     TODO Change to 15 minutes before now
@@ -231,8 +232,6 @@ def filter_data(selected_mode,
             
         # Hourly filtering --> Between certain hours, irrespective of date
         if 'hourly' in filteroptions:
-            print('do hourly stuff')
-            print(hourslider)
             index = pd.DatetimeIndex(filtered_df['timestamp'])
             begin_time = '%s:00' %(hourslider[0])
             end_time = '%s:00' %(hourslider[1])
@@ -275,7 +274,6 @@ def update_figure(jsonified_filtered_data, relayoutData):
     # Add default zoom if not present in relayoutData
     if 'mapbox.zoom' not in relayoutData:
         relayoutData['mapbox.zoom']=6.5
-    print(relayoutData)
     
     # Load data from hidden div
     dff = pd.read_json(jsonified_filtered_data, orient='split')
@@ -407,13 +405,13 @@ def timeseries_graph(jsonified_filtered_data, hoverData,filteroptions):
     
     
     layout = dict(
-                title = 'Timeseries for location %s, %s' %(lat, lon),
+                title = 'Tijdserie voor locatie %s, %s' %(lat, lon),
                 plot_bgcolor="#1E1E1E", paper_bgcolor="#1E1E1E",    
                 font = dict(color = "#d8d8d8"),
-                xaxis = dict(title = 'Number of trucks')
+                xaxis = dict(title = 'Aantal vrachtwagens')
                 )
     if 'daily' in filteroptions:
-        layout['xaxis']['title'] = "Trucks per hour of the day"
+        layout['xaxis']['title'] = "Aantal vrachtwagens per uur"
     
     return {
             'data': data,
