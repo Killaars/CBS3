@@ -1,7 +1,6 @@
 # %%
 '''
 TODO
-- Monitoring mode with https://dash.plot.ly/live-updates
 - dynamic layout
 - Realtime naar 15 minuten vanaf nu
 
@@ -16,6 +15,7 @@ DONE
 - Bootstrap components
 - Nederlands of engels? --> Nederlands
 - Stresstest --> bij 250.000 records werkt het nog steeds best prima
+- Monitoring mode with https://dash.plot.ly/live-updates
 
 '''
 # %%
@@ -154,8 +154,9 @@ app.layout = html.Div(
                                 display_format="MMMM D, YYYY",
                                 style={"border": "0px solid black"},
                             ),
-                            html.Br(),
-                            html.Br(),
+                            ]),
+                        html.Br(),
+                        dbc.FormGroup([
                             dbc.Label('Kies start en eind tijd:'),
                             dcc.RangeSlider(
                                 id='hour-slider',
@@ -166,8 +167,9 @@ app.layout = html.Div(
                                 marks={i: '{}:00'.format(i) for i in range(0, 28, 4)},
                                 value=[0, 24]
                                 ),
-                            html.Br(),
-                            html.Br(),
+                            ]),
+                        html.Br(),
+                        dbc.FormGroup([
                             dcc.Interval(
                                 id='interval-component',
                                 interval=60*1000, # in milliseconds, every minute
