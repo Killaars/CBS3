@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib
+import pandas as pd
 
 # Zoom pixel distance curve
 levels = [8,9,10,11,12]
@@ -43,3 +44,14 @@ def determine_bbox(zoom,center_lat,center_lon,fit):
     minlon = distance(meters=horbox/2).destination(
         (center_lat, center_lon), 270)[1]
     return maxlat,maxlon,minlat,minlon
+
+def read_input_csv(path,filename):
+    df = pd.read_csv(str(path / filename))
+    # df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
+    df = df.round(4)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    # Splitting bottom part of West into A4_R
+    df.loc[(df['road'] == 'West') & (df['Camera_id'] < 7), 'road'] = 'A4'
+    return df
+    

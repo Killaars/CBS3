@@ -33,7 +33,7 @@ import numpy as np
 
 from variables import token
 from project_functions import p3 as zoom_curve
-from project_functions import get_color, get_linewidth, determine_bbox
+from project_functions import get_color, get_linewidth, determine_bbox, read_input_csv
 
 # Set paths/filenames etc
 path = Path('/home/killaarsl/Documents/CBS3_visualization/')  # Main directory
@@ -41,14 +41,8 @@ filename = 'data/output/proxy_data_withdec.csv'
 
 # Read csv file
 # First read is done here, some variables are extracted from this
-# Afterwards, updated every minute
-df = pd.read_csv(str(path / filename))
-# df = pd.read_csv(str(path / 'data/output/proxy_data.csv'))
-df = df.round(4)
-df['timestamp'] = pd.to_datetime(df['timestamp'])
-
-# Splitting bottom part of West into A4_R
-df.loc[(df['road'] == 'West') & (df['Camera_id'] < 7), 'road'] = 'A4'
+# Afterwards, updated every minute in def update_data
+df = read_input_csv(path,filename)
 
 # converting to json format
 df_json = df.to_json(date_format='iso', orient='split')
@@ -115,20 +109,6 @@ app.layout = html.Div(
                                 value=[]),
                             ]),
                         html.Br(),
-                        # Checkboxes to determine the filtering
-                        dbc.FormGroup([
-                            dbc.Label('Kies filter detail:'),
-                            dbc.Checklist(
-                                id='filteroptions',
-                                options=[
-                                    {"label": "Dagelijks", "value": 'daily'},
-                                    {"label": "Uurlijks", "value": 'hourly'},
-                                    ],
-                                labelStyle={'display': 'inline-block'},
-                                value=[]
-                                )
-                            ]),
-                        html.Br(),
                         dbc.FormGroup(
                             id='date_formgroup',
                                 children=[
@@ -159,14 +139,27 @@ app.layout = html.Div(
                                     display_format="MMMM D, YYYY",
                                     style={"border": "0px solid black"},
                                     ),
-                                html.Br(),
-                                html.Br(),
-                                ], style={"display": "none"}
+                                ],
                             ),
+                        html.Br(),
+                        # Checkboxes to determine the filtering
+                        dbc.FormGroup([
+                            dbc.Label('Kies filter detail:'),
+                            dbc.Checklist(
+                                id='filteroptions',
+                                options=[
+                                    {"label": "Gemiddeld dagelijks patroon", "value": 'daily'},
+                                    {"label": "Alleen specifieke uren", "value": 'hourly'},
+                                    ],
+                                labelStyle={'display': 'inline-block'},
+                                value=[]
+                                )
+                            ]),
+                        html.Br(),
                         dbc.FormGroup(
                             id='hour_formgroup',
                             children=[
-                                dbc.Label('Kies start en eind tijd:'),
+                                dbc.Label('Uren tussen:'),
                                 dcc.RangeSlider(
                                     id='hour-slider',
                                     count=1,
@@ -237,25 +230,8 @@ def update_data(n):
     '''
     Check the file for new data every minute
     '''
-    new_df = pd.read_csv(str(path / filename))
-    new_df = new_df.round(4)
-    new_df['timestamp'] = pd.to_datetime(new_df['timestamp'])
-    
-    # Splitting bottom part of West into A4_R
-    new_df.loc[(new_df['road'] == 'West') & (new_df['Camera_id'] < 7), 'road'] = 'A4'
+    new_df = read_input_csv(path,filename)
     return new_df.to_json(date_format='iso', orient='split')
-
-
-@app.callback(Output('date_formgroup', 'style'),               
-              [Input('filteroptions', 'value')])
-def show_dates(filteroptions):
-    '''
-    Only show daily if it makes sense
-    '''
-    if 'daily' in filteroptions:
-        return {}
-    else:
-        return {'display': 'none'}
 
 
 @app.callback(Output('hour_formgroup', 'style'),               
@@ -310,9 +286,8 @@ def filter_data(selected_mode,
         filtered_df = dff.copy()
 
         # Daily filtering --> between or equal to start/end date
-        if 'daily' in filteroptions:
-            filtered_df = filtered_df[(filtered_df['timestamp'] >= start_date) &
-                                      (filtered_df['timestamp'] <= end_date)]
+        filtered_df = filtered_df[(filtered_df['timestamp'] >= start_date) &
+                                  (filtered_df['timestamp'] <= end_date)]
 
         # Hourly filtering --> Between certain hours, irrespective of date
         if 'hourly' in filteroptions:
