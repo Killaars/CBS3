@@ -223,7 +223,7 @@ def filter_data(selected_mode,
         filtered_df = df[df['timestamp']>=timecutoff]
         
     ######### Aggregated
-    if selected_mode == 'Aggregated':
+    if selected_mode == 'Alles':
         filtered_df = df.copy()
         
         # Daily filtering --> between or equal to start/end date
