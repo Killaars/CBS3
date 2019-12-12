@@ -193,6 +193,27 @@ app.layout = html.Div(
         ]
     )
 
+# Disables daily filter if daily is not selected
+@app.callback([Output('start_date', 'disabled'),
+              Output('end_date', 'disabled')],
+             [Input('filteroptions', 'value')])
+def set_date_enabled_state(filteroptions):
+    if 'daily' in filteroptions:
+        on_off = False
+    else:
+        on_off = True
+    return on_off,on_off
+
+# Disables hourly filter if hourly is not selected
+@app.callback(Output('hour-slider', 'disabled'),
+             [Input('filteroptions', 'value')])
+def set_hour_enabled_state(filteroptions):
+    if 'hourly' in filteroptions:
+        on_off = False
+    else:
+        on_off = True
+    return on_off
+
 ### Filter data callback
 '''
 Filters and stores the df as json, other graphs can use it as input
@@ -260,6 +281,9 @@ def filter_data(selected_mode,
             
     return filtered_df.to_json(date_format='iso', orient='split')
 
+'''
+Update main figure callback
+'''
 @app.callback(
     Output('mapbox_graph', 'figure'),
     [Input('filtered_data', 'children'),
