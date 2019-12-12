@@ -1,9 +1,7 @@
 # %%
 '''
 TODO
-- dynamic layout
 - Realtime naar 15 minuten vanaf nu
-- denken over einddatum
 
 DONE
 - Zelfde vrachtwagen minder vaak meetellen --> gemiddelde per punt
@@ -17,6 +15,8 @@ DONE
 - Nederlands of engels? --> Nederlands
 - Stresstest --> bij 250.000 records werkt het nog steeds best prima
 - Monitoring mode with https://dash.plot.ly/live-updates
+- denken over einddatum
+- dynamic layout
 
 '''
 # %%
@@ -94,7 +94,7 @@ app.layout = html.Div(
                             dbc.RadioItems(
                                 id='mode',
                                 options=[{'label': i, 'value': i} for i in ['Realtime', 'Alles']],
-                                value='Realtime',
+                                value='Alles',
                                 labelStyle={'display': 'inline-block'},
                                 )
                             ]),
