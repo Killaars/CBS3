@@ -32,7 +32,7 @@ import pandas as pd
 import numpy as np
 
 from variables import token
-from project_functions import p3 as zoom_curve
+from project_functions import P3 as zoom_curve
 from project_functions import get_color, get_linewidth, determine_bbox, read_input_csv
 
 # Set paths/filenames etc
@@ -42,7 +42,7 @@ filename = 'data/output/proxy_data_withdec.csv'
 # Read csv file
 # First read is done here, some variables are extracted from this
 # Afterwards, updated every minute in def update_data
-df = read_input_csv(path,filename)
+df = read_input_csv(path, filename)
 
 # converting to json format
 df_json = df.to_json(date_format='iso', orient='split')
@@ -111,7 +111,7 @@ app.layout = html.Div(
                         html.Br(),
                         dbc.FormGroup(
                             id='date_formgroup',
-                                children=[
+                            children=[
                                 dbc.Label('Kies start en eind datum:'),
                                 dcc.DatePickerSingle(
                                     id="start_date",
@@ -226,24 +226,25 @@ app.layout = html.Div(
 
 @app.callback(Output('refreshed_data', 'children'),
               [Input('interval-component', 'n_intervals')])
-def update_data(n):
+def update_data(n_intervals):
     '''
     Check the file for new data every minute
     '''
-    new_df = read_input_csv(path,filename)
+    new_df = read_input_csv(path, filename)
     return new_df.to_json(date_format='iso', orient='split')
 
 
-@app.callback(Output('hour_formgroup', 'style'),               
+@app.callback(Output('hour_formgroup', 'style'),
               [Input('filteroptions', 'value')])
 def show_hours(filteroptions):
     '''
     Only show hourly if it makes sense
     '''
     if 'hourly' in filteroptions:
-        return {}
+        to_return = {}
     else:
-        return {'display': 'none'}
+        to_return = {'display': 'none'}
+    return to_return
 
 
 @app.callback(
@@ -275,7 +276,7 @@ def filter_data(selected_mode,
         dff = pd.read_json(jsonified_refreshed_data, orient='split')
     except:
         dff = pd.read_json(df_json, orient='split')
-    
+
     # Realtime
     if selected_mode == 'Realtime':
         timecutoff = max(dff['timestamp']) - datetime.timedelta(minutes=15)
