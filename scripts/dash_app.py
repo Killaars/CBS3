@@ -2,6 +2,7 @@
 '''
 TODO
 - Realtime naar 15 minuten vanaf nu
+- click event ipv hoverevent
 
 DONE
 - Zelfde vrachtwagen minder vaak meetellen --> gemiddelde per punt
@@ -17,6 +18,8 @@ DONE
 - Monitoring mode with https://dash.plot.ly/live-updates
 - denken over einddatum
 - dynamic layout
+- maxzoom=12 --> is er niet, nu laat ie een lege kaart zien
+- click event ipv hoverevent
 
 '''
 # %%
@@ -32,12 +35,11 @@ import pandas as pd
 import numpy as np
 
 from variables import token
-from project_functions import P3 as zoom_curve
 from project_functions import get_color, get_linewidth, determine_bbox, read_input_csv
 
 # Set paths/filenames etc
 path = Path('/home/killaarsl/Documents/CBS3_visualization/')  # Main directory
-filename = 'data/output/proxy_data_withdec.csv'
+filename = 'data/output/proxy_data.csv'
 
 # Read csv file
 # First read is done here, some variables are extracted from this
@@ -62,6 +64,12 @@ nr_cameras = pd.DataFrame({'nr_cameras': [len(df[df['road'] == x]['Camera_id'].u
 # First from the data and last is current time
 mn = min(df['timestamp'])
 mx = pd.to_datetime(datetime.datetime.now())
+
+# Zoom pixel distance curve
+# Fit on zoom levels and meter/pixel values as specified by:
+# https://docs.mapbox.com/help/glossary/zoom-level/
+# Values for lat of 50 (middle between 40 and 60)
+ZOOM_CURVE = np.poly1d(np.polyfit([8, 9, 10, 11, 12], [193.5, 96.5, 48.5, 24, 12.5], 3))
 
 # %%
 # external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -200,6 +208,7 @@ app.layout = html.Div(
                         ),
                         html.Div(children=[
                             dcc.Graph(id='mapbox_graph',
+                                      clickData={'points': [{'lat': 52.3128, 'lon': 7.0391}]},
                                       hoverData={'points': [{'lat': 52.3128, 'lon': 7.0391}]},
                                       relayoutData={'mapbox.zoom': 6.5},
                                       )
@@ -310,7 +319,7 @@ def filter_data(selected_mode,
                 relayoutdata['mapbox.zoom'],
                 relayoutdata['mapbox.center']['lat'],
                 relayoutdata['mapbox.center']['lon'],
-                zoom_curve)
+                ZOOM_CURVE)
 
             filtered_df = filtered_df[(filtered_df['lat'] >= minlat) &
                                       (filtered_df['lat'] <= maxlat) &
@@ -364,7 +373,7 @@ def update_figure(jsonified_filtered_data, relayoutdata):
                                       hoverinfo='text'
                                       ))
         else:
-            plot_data = []
+            plot_data = [dict(type='scattermapbox')]
 
     # Zoom smaller than XXXX --> aggregates per segment. Travel direction in hoverinfo
     if relayoutdata['mapbox.zoom'] >= 9.5:
@@ -378,7 +387,7 @@ def update_figure(jsonified_filtered_data, relayoutdata):
             max_intensity = max(max_intensity)
 
             # Empty plot data
-            plot_data = []
+            plot_data = [dict(type='scattermapbox')]
 
             for direction in dff['direction'].unique():
                 temp_df = dff[dff['direction'] == direction]
@@ -416,7 +425,7 @@ def update_figure(jsonified_filtered_data, relayoutdata):
                                               hoverinfo='text'
                                               ))
         else:
-            plot_data = []
+            plot_data = [dict(type='scattermapbox')]
     # Returns plot_data as data part of plotly graph and filled layout
     return {
         "data": plot_data,
@@ -447,17 +456,17 @@ def update_figure(jsonified_filtered_data, relayoutdata):
 @app.callback(
         Output('timeseries', 'figure'),
         [Input('filtered_data', 'children'),
-         Input('mapbox_graph', 'hoverData'),
+         Input('mapbox_graph', 'clickData'),
          Input('filteroptions', 'value'),
          ])
-def timeseries_graph(jsonified_filtered_data, hoverdata, filteroptions):
+def timeseries_graph(jsonified_filtered_data, clickdata, filteroptions):
     '''
     Builds timeseries graph. Uses hoverData to select camera point and filtered data from filter_data
     '''
     # Read input
     dff = pd.read_json(jsonified_filtered_data, orient='split')
-    lat = np.round(hoverdata['points'][0]['lat'], 4)
-    lon = np.round(hoverdata['points'][0]['lon'], 4)
+    lat = np.round(clickdata['points'][0]['lat'], 4)
+    lon = np.round(clickdata['points'][0]['lon'], 4)
 
     # Build timeseries for location
     timeseries_to_plot = dff[(dff['lat'] == lat) & (dff['lon'] == lon)].copy()
